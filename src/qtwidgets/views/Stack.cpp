@@ -18,6 +18,8 @@
 #include "core/Window_p.h"
 #include "core/DockRegistry_p.h"
 #include "core/Stack_p.h"
+#include "core/TabBar_p.h"
+#include "core/TitleBar_p.h"
 #include "Config.h"
 #include "core/View_p.h"
 
@@ -41,6 +43,8 @@ public:
     KDBindings::ScopedConnection tabBarAutoHideChanged;
     KDBindings::ScopedConnection screenChangedConnection;
     KDBindings::ScopedConnection buttonsToHideIfDisabledConnection;
+    KDBindings::ScopedConnection currentDockWidgetChangedConnection;
+    KDBindings::ScopedConnection floatButtonToolTipConnection;
 
     QHBoxLayout *cornerWidgetLayout = nullptr;
     QAbstractButton *floatButton = nullptr;
@@ -128,6 +132,7 @@ void Stack::setupTabBarButtons()
     auto factory = static_cast<ViewFactory *>(Config::self().viewFactory());
     d->closeButton = factory->createTitleBarButton(this, TitleBarButtonType::Close);
     d->floatButton = factory->createTitleBarButton(this, TitleBarButtonType::Float);
+    d->closeButton->setToolTip(tr("Close"));
 
     auto cornerWidget = new QWidget(this);
     cornerWidget->setObjectName(QStringLiteral("Corner Widget"));
@@ -161,6 +166,17 @@ void Stack::setupTabBarButtons()
 
     if (auto tb = qobject_cast<QtWidgets::TabBar *>(tabBar()))
         connect(tb, &QtWidgets::TabBar::countChanged, this, &Stack::updateTabBarButtons);
+
+    // The group's title bar doesn't exist yet, as the group creates us first. Follow its float
+    // button's tooltip once the first dock widget arrives.
+    d->currentDockWidgetChangedConnection = m_stack->tabBar()->dptr()->currentDockWidgetChanged.connect([this](Core::DockWidget *) {
+        Core::TitleBar *tb = m_stack->group()->titleBar();
+        if (!tb || d->floatButtonToolTipConnection->isActive())
+            return;
+
+        d->floatButton->setToolTip(tb->floatButtonToolTip());
+        d->floatButtonToolTipConnection = tb->dptr()->floatButtonToolTipChanged.connect([this](const QString &text) { d->floatButton->setToolTip(text); });
+    });
 
     updateTabBarButtons();
 }

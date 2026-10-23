@@ -122,6 +122,13 @@ bool Button::event(QEvent *ev)
 
         return result;
     }
+#if QT_CONFIG(accessibility)
+    case QEvent::ToolTipChange:
+        // These buttons only show an icon. Without an accessible name, screen readers and UI
+        // automation tools just see an anonymous button, and Qt doesn't fall back to the tooltip.
+        setAccessibleName(toolTip());
+        break;
+#endif
     default:
         break;
     }
