@@ -655,6 +655,17 @@ Core::DockWidget *TitleBar::singleDockWidget() const
     return dockWidgets.isEmpty() ? nullptr : dockWidgets.first();
 }
 
+Core::DockWidget *TitleBar::currentDockWidget() const
+{
+    if (m_group)
+        return m_group->currentDockWidget();
+
+    if (m_floatingWindow && m_floatingWindow->hasSingleGroup())
+        return m_floatingWindow->singleFrame()->currentDockWidget();
+
+    return nullptr;
+}
+
 bool TitleBar::isFloating() const
 {
     if (m_floatingWindow)

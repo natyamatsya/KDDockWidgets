@@ -37,6 +37,7 @@ namespace KDDockWidgets {
 class DropIndicatorOverlay;
 
 namespace Core {
+class DockWidget;
 class DropArea;
 class Separator;
 class TabBar;
@@ -75,6 +76,28 @@ public:
     QIcon iconForButtonType(TitleBarButtonType type, qreal dpr) const override;
     void clearIconCache();
     virtual QAbstractButton *createTitleBarButton(QWidget *parent, TitleBarButtonType) const;
+
+    /// @brief Returns the object name for a title bar button acting on @p dockWidget
+    ///
+    /// Title bar buttons are named after their type by createTitleBarButton(): "closeButton",
+    /// "floatButton", "minimizeButton", "maximizeButton" and "autoHideButton". As there's one set
+    /// of buttons per title bar, those names aren't unique. Override this to name the buttons
+    /// after the dock widget they act on instead, for UI tests or automation tools that look
+    /// widgets up by object name.
+    ///
+    /// This also applies to the buttons shown next to the tabs with
+    /// Config::Flag_ShowButtonsOnTabBarIfTitleBarHidden.
+    ///
+    /// Called whenever @p dockWidget changes, for example when the current tab changes.
+    /// @param type the button's type. The maximize button always passes TitleBarButtonType::Maximize
+    /// and the auto-hide button TitleBarButtonType::AutoHide, whatever state they're showing.
+    /// @param dockWidget the dock widget whose title the title bar is showing, that is, the
+    /// current tab's. nullptr if there's none, as for the title bar of a floating window with
+    /// nested groups.
+    /// @return the new object name, or an empty string to leave the name as it is.
+    /// The default implementation returns an empty string.
+    virtual QString titleBarButtonObjectName(TitleBarButtonType type,
+                                             Core::DockWidget *dockWidget) const;
 
     Core::ClassicIndicatorWindowViewInterface *
     createClassicIndicatorWindow(Core::ClassicDropIndicatorOverlay *, Core::View *parent) const override;

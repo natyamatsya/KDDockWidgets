@@ -24,6 +24,7 @@
 #include "views/GroupViewInterface.h"
 
 #include "core/TitleBar.h"
+#include "core/TitleBar_p.h"
 #include "core/Stack.h"
 #include "core/FloatingWindow.h"
 #include "core/MDILayout.h"
@@ -206,6 +207,7 @@ void Group::updateTitleAndIcon()
         }
 
         setObjectName(dw->uniqueName());
+        m_titleBar->dptr()->currentDockWidgetChanged.emit();
 
     } else if (currentTabIndex() != -1) {
         KDDW_ERROR("Invalid dock widget for group. index={}", currentTabIndex());

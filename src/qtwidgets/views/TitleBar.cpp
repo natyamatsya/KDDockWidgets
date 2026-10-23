@@ -150,6 +150,7 @@ public:
     KDBindings::ScopedConnection autoHideButtonConnection;
     KDBindings::ScopedConnection minimizeButtonConnection;
     KDBindings::ScopedConnection maximizeButtonConnection;
+    KDBindings::ScopedConnection currentDockWidgetConnection;
 };
 
 TitleBar::TitleBar(Core::TitleBar *controller, Core::View *parent)
@@ -248,6 +249,25 @@ void TitleBar::init()
         d->autoHideButtonConnection = m_titleBar->dptr()->autoHideButtonChanged.connect([this](bool visible, bool enabled, TitleBarButtonType type) { updateAutoHideButton(visible, enabled, type); });
         d->minimizeButtonConnection = m_titleBar->dptr()->minimizeButtonChanged.connect([this](bool visible, bool enabled) { updateMinimizeButton(visible, enabled); });
         d->maximizeButtonConnection = m_titleBar->dptr()->maximizeButtonChanged.connect([this](bool visible, bool enabled, TitleBarButtonType type) { updateMaximizeButton(visible, enabled, type); });
+
+        // Name the buttons after the dock widget, if the factory wants that. Only once there is a
+        // dock widget, which there isn't while constructing.
+        d->currentDockWidgetConnection = m_titleBar->dptr()->currentDockWidgetChanged.connect([this] {
+            auto factory = static_cast<ViewFactory *>(Config::self().viewFactory());
+            Core::DockWidget *dw = m_titleBar->currentDockWidget();
+            const std::pair<QAbstractButton *, TitleBarButtonType> buttons[] = {
+                { m_closeButton, TitleBarButtonType::Close },
+                { m_floatButton, TitleBarButtonType::Float },
+                { m_minimizeButton, TitleBarButtonType::Minimize },
+                { m_maximizeButton, TitleBarButtonType::Maximize },
+                { m_autoHideButton, TitleBarButtonType::AutoHide }
+            };
+            for (const auto &[button, type] : buttons) {
+                const QString name = factory->titleBarButtonObjectName(type, dw);
+                if (button && !name.isEmpty())
+                    button->setObjectName(name);
+            }
+        });
 
         d->iconChangedConnection = m_titleBar->dptr()->iconChanged.connect([this] { if (m_titleBar->icon().isNull()) {
             m_dockWidgetIcon->setPixmap(QPixmap());

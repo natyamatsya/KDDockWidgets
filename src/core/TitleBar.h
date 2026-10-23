@@ -65,6 +65,12 @@ public:
     /// There should always be at least 1. If more than 1 then they are tabbed.
     DockWidget::List dockWidgets() const;
 
+    ///@brief Returns the dock widget whose title and icon this title bar is showing
+    /// That's the current tab's dock widget.
+    /// Returns nullptr for the title bar of a floating window with more than one group,
+    /// and for standalone title bars.
+    Core::DockWidget *currentDockWidget() const;
+
     ///@brief the icon
     Icon icon() const;
     void setIcon(const Icon &icon);

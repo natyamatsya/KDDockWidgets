@@ -117,11 +117,38 @@ QAbstractButton *ViewFactory::createTitleBarButton(QWidget *parent,
     auto button = new QtWidgets::Button(parent);
     button->setIcon(iconForButtonType(type, parent->devicePixelRatioF()));
 
+    switch (type) {
+    case TitleBarButtonType::Close:
+        button->setObjectName(QStringLiteral("closeButton"));
+        break;
+    case TitleBarButtonType::Float:
+        button->setObjectName(QStringLiteral("floatButton"));
+        break;
+    case TitleBarButtonType::Minimize:
+        button->setObjectName(QStringLiteral("minimizeButton"));
+        break;
+    case TitleBarButtonType::Maximize:
+    case TitleBarButtonType::Normal:
+        button->setObjectName(QStringLiteral("maximizeButton"));
+        break;
+    case TitleBarButtonType::AutoHide:
+    case TitleBarButtonType::UnautoHide:
+        button->setObjectName(QStringLiteral("autoHideButton"));
+        break;
+    case TitleBarButtonType::AllTitleBarButtonTypes:
+        break;
+    }
+
 #ifdef DOCKS_DEVELOPER_MODE
     button->setProperty("KDDW_BUTTON_TYPE", QVariant::fromValue<TitleBarButtonType>(type));
 #endif
 
     return button;
+}
+
+QString ViewFactory::titleBarButtonObjectName(TitleBarButtonType, Core::DockWidget *) const
+{
+    return {};
 }
 
 // iconForButtonType impl is the same for QtQuick and QtWidgets

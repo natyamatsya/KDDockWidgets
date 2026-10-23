@@ -14,6 +14,7 @@
 #include "MainWindow.h"
 #include "core/Logging_p.h"
 #include "TitleBar.h"
+#include "TitleBar_p.h"
 #include "Group.h"
 #include "Platform.h"
 #include "KDDockWidgets.h"
@@ -554,6 +555,7 @@ void FloatingWindow::updateTitleAndIcon()
     }
     m_titleBar->setTitle(title);
     m_titleBar->setIcon(icon);
+    m_titleBar->dptr()->currentDockWidgetChanged.emit();
 
     // Even without a native title bar it's nice to set the window title/icon, so it shows
     // in the taskbar (when minimization is supported), or Alt-Tab (in supporting Window Managers)

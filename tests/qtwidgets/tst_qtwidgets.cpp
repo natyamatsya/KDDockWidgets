@@ -199,6 +199,7 @@ private Q_SLOTS:
     void tst_deleteDockWidget();
     void tst_standaloneTitleBar();
     void tst_titleBarTitle();
+    void tst_titleBarButtonNames();
     void tst_widgetAddQAction();
     void tst_currentTabChanged();
     void tst_moveTab();
@@ -2263,6 +2264,120 @@ void TestQtWidgets::tst_titleBarTitle()
 
     dock1->setTitle("Other");
     QCOMPARE(tb->title(), "Other");
+}
+
+namespace {
+
+class ButtonNamesViewFactory : public QtWidgets::ViewFactory
+{
+public:
+    QString titleBarButtonObjectName(TitleBarButtonType type, Core::DockWidget *dw) const override
+    {
+        if (!dw)
+            return {};
+
+        const char *typeName = QMetaEnum::fromType<TitleBarButtonType>().valueToKey(int(type));
+        return dw->uniqueName() + QLatin1Char('-') + QLatin1String(typeName);
+    }
+};
+
+QWidget *titleBarWidget(QtWidgets::DockWidget *dock)
+{
+    return QtCommon::View_qt::asQWidget(dock->dockWidget()->dptr()->group()->titleBar()->view());
+}
+
+QtWidgets::Stack *stackWidget(QtWidgets::DockWidget *dock)
+{
+    return qobject_cast<QtWidgets::Stack *>(
+        QtCommon::View_qt::asQWidget(dock->dockWidget()->dptr()->group()->stack()->view()));
+}
+
+}
+
+void TestQtWidgets::tst_titleBarButtonNames()
+{
+    {
+        // By default, buttons are named after their type, and named for accessibility too
+        EnsureTopLevelsDeleted e;
+        auto m = createMainWindow(QSize(1000, 1000), MainWindowOption_None, "MW1");
+        auto dock1 = new QtWidgets::DockWidget(QStringLiteral("dock1"));
+        m->addDockWidget(dock1->dockWidget(), Location_OnBottom);
+
+        QWidget *titleBar = titleBarWidget(dock1);
+        auto closeButton = titleBar->findChild<QAbstractButton *>(QStringLiteral("closeButton"));
+        auto floatButton = titleBar->findChild<QAbstractButton *>(QStringLiteral("floatButton"));
+        QVERIFY(closeButton);
+        QVERIFY(floatButton);
+        QVERIFY(titleBar->findChild<QAbstractButton *>(QStringLiteral("minimizeButton")));
+        QVERIFY(titleBar->findChild<QAbstractButton *>(QStringLiteral("maximizeButton")));
+        QVERIFY(titleBar->findChild<QAbstractButton *>(QStringLiteral("autoHideButton")));
+
+#if QT_CONFIG(accessibility)
+        QVERIFY(!closeButton->accessibleName().isEmpty());
+        QCOMPARE(closeButton->accessibleName(), closeButton->toolTip());
+        QVERIFY(!floatButton->accessibleName().isEmpty());
+        QCOMPARE(floatButton->accessibleName(), floatButton->toolTip());
+#endif
+    }
+
+    {
+        // A factory can name them after the dock widget, which follows the current tab
+        EnsureTopLevelsDeleted e;
+        Config::self().setViewFactory(new ButtonNamesViewFactory());
+        auto m = createMainWindow(QSize(1000, 1000), MainWindowOption_None, "MW2");
+        auto dock1 = new QtWidgets::DockWidget(QStringLiteral("dock1"));
+        auto dock2 = new QtWidgets::DockWidget(QStringLiteral("dock2"));
+        m->addDockWidget(dock1->dockWidget(), Location_OnBottom);
+        dock1->addDockWidgetAsTab(dock2);
+
+        QWidget *titleBar = titleBarWidget(dock1);
+        dock1->dockWidget()->setAsCurrentTab();
+        QVERIFY(titleBar->findChild<QAbstractButton *>(QStringLiteral("dock1-Close")));
+        QVERIFY(titleBar->findChild<QAbstractButton *>(QStringLiteral("dock1-Float")));
+        QVERIFY(titleBar->findChild<QAbstractButton *>(QStringLiteral("dock1-Maximize")));
+        QVERIFY(titleBar->findChild<QAbstractButton *>(QStringLiteral("dock1-AutoHide")));
+
+        dock2->dockWidget()->setAsCurrentTab();
+        QVERIFY(titleBar->findChild<QAbstractButton *>(QStringLiteral("dock2-Close")));
+        QVERIFY(!titleBar->findChild<QAbstractButton *>(QStringLiteral("dock1-Close")));
+    }
+
+    {
+        // Also the buttons next to the tabs, when the title bar is hidden
+        EnsureTopLevelsDeleted e;
+        auto &config = Config::self();
+        config.setFlags(config.flags() | Config::Flag_HideTitleBarWhenTabsVisible
+                        | Config::Flag_AlwaysShowTabs
+                        | Config::Flag_ShowButtonsOnTabBarIfTitleBarHidden);
+        config.setViewFactory(new ButtonNamesViewFactory());
+        auto m = createMainWindow(QSize(1000, 1000), MainWindowOption_None, "MW3");
+        auto dock1 = new QtWidgets::DockWidget(QStringLiteral("dock1"));
+        auto dock2 = new QtWidgets::DockWidget(QStringLiteral("dock2"));
+        m->addDockWidget(dock1->dockWidget(), Location_OnBottom);
+        dock1->addDockWidgetAsTab(dock2);
+
+        QtWidgets::Stack *stack = stackWidget(dock1);
+        QVERIFY(stack);
+        QAbstractButton *closeButton = stack->button(TitleBarButtonType::Close);
+        QAbstractButton *floatButton = stack->button(TitleBarButtonType::Float);
+        QVERIFY(closeButton);
+        QVERIFY(floatButton);
+
+        dock1->dockWidget()->setAsCurrentTab();
+        QCOMPARE(closeButton->objectName(), QStringLiteral("dock1-Close"));
+        QCOMPARE(floatButton->objectName(), QStringLiteral("dock1-Float"));
+        dock2->dockWidget()->setAsCurrentTab();
+        QCOMPARE(closeButton->objectName(), QStringLiteral("dock2-Close"));
+
+        QVERIFY(!closeButton->toolTip().isEmpty());
+        QVERIFY(!floatButton->toolTip().isEmpty());
+#if QT_CONFIG(accessibility)
+        QCOMPARE(closeButton->accessibleName(), closeButton->toolTip());
+        QCOMPARE(floatButton->accessibleName(), floatButton->toolTip());
+#endif
+    }
+
+    Config::self().setViewFactory(new QtWidgets::ViewFactory());
 }
 
 void TestQtWidgets::tst_widgetAddQAction()

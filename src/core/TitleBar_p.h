@@ -31,6 +31,9 @@ public:
     KDBindings::Signal<bool> floatButtonVisibleChanged;
     KDBindings::Signal<QString> floatButtonToolTipChanged;
 
+    /// @brief Emitted when currentDockWidget() might have changed
+    KDBindings::Signal<> currentDockWidgetChanged;
+
     /// @brief Emitted to tell the views to update their auto-hide button
     KDBindings::Signal<bool, bool, KDDockWidgets::TitleBarButtonType> autoHideButtonChanged;
 

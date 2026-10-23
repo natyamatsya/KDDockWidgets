@@ -167,9 +167,18 @@ void Stack::setupTabBarButtons()
     if (auto tb = qobject_cast<QtWidgets::TabBar *>(tabBar()))
         connect(tb, &QtWidgets::TabBar::countChanged, this, &Stack::updateTabBarButtons);
 
+    // Name the buttons after the current dock widget, if the factory wants that.
     // The group's title bar doesn't exist yet, as the group creates us first. Follow its float
     // button's tooltip once the first dock widget arrives.
-    d->currentDockWidgetChangedConnection = m_stack->tabBar()->dptr()->currentDockWidgetChanged.connect([this](Core::DockWidget *) {
+    d->currentDockWidgetChangedConnection = m_stack->tabBar()->dptr()->currentDockWidgetChanged.connect([this](Core::DockWidget *dw) {
+        auto factory = static_cast<ViewFactory *>(Config::self().viewFactory());
+        for (auto [button, type] : { std::pair(d->closeButton, TitleBarButtonType::Close),
+                                     std::pair(d->floatButton, TitleBarButtonType::Float) }) {
+            const QString name = factory->titleBarButtonObjectName(type, dw);
+            if (!name.isEmpty())
+                button->setObjectName(name);
+        }
+
         Core::TitleBar *tb = m_stack->group()->titleBar();
         if (!tb || d->floatButtonToolTipConnection->isActive())
             return;
