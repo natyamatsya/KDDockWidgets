@@ -469,6 +469,10 @@ void Group::updateTitleBarVisibility()
     const bool wasVisible = m_titleBar->isVisible();
     m_titleBar->setVisible(visible);
 
+    // Whether the group floats can change with the layout too, and the float button's
+    // tooltip says what it does
+    m_titleBar->updateFloatButton();
+
     if (wasVisible != visible) {
         safeEmitSignal(d->actualTitleBarChanged);
         const auto docks = dockWidgets();
@@ -710,6 +714,10 @@ void Group::unoverlay()
 
 bool Group::isFloating() const
 {
+    // The title bar asks while the group is constructed, before it has a layout
+    if (m_inCtor || m_inDtor)
+        return false;
+
     if (isInMainWindow() || isMDI())
         return false;
 
