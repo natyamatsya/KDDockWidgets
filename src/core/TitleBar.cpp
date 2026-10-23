@@ -684,7 +684,9 @@ bool TitleBar::isFocused() const
 
 void TitleBar::updateFloatButton()
 {
-    setFloatButtonToolTip(floatingWindow() ? tr("Dock window") : tr("Undock window"));
+    // isFloating(), not floatingWindow(): a group's title bar has no floating window of
+    // its own, but its group can float, and then the button docks it (onFloatClicked)
+    setFloatButtonToolTip(isFloating() ? tr("Dock window") : tr("Undock window"));
     setFloatButtonVisible(supportsFloatingButton() && !buttonIsUserHidden(TitleBarButtonType::Float, /*enabled=*/true));
 }
 

@@ -199,6 +199,7 @@ private Q_SLOTS:
     void tst_deleteDockWidget();
     void tst_standaloneTitleBar();
     void tst_titleBarTitle();
+    void tst_floatButtonToolTip();
     void tst_widgetAddQAction();
     void tst_currentTabChanged();
     void tst_moveTab();
@@ -2248,6 +2249,40 @@ void TestQtWidgets::tst_standaloneTitleBar()
     QVERIFY(window.isVisible());
     titleBar.asTitleBarController()->onCloseClicked();
     QVERIFY(!window.isVisible());
+}
+
+void TestQtWidgets::tst_floatButtonToolTip()
+{
+    // A group's title bar says what its float button does: undock while docked,
+    // dock again once the group floats
+    EnsureTopLevelsDeleted e;
+    auto m = createMainWindow(QSize(1000, 1000), MainWindowOption_None, "MW1");
+    auto dock1 = new QtWidgets::DockWidget(QStringLiteral("dock1"));
+    auto dock2 = new QtWidgets::DockWidget(QStringLiteral("dock2"));
+    m->addDockWidget(dock1->dockWidget(), Location_OnBottom);
+    dock1->addDockWidgetAsTab(dock2);
+
+    Core::TitleBar *tb = dock1->dockWidget()->dptr()->group()->titleBar();
+    QVERIFY(!tb->isFloating());
+    QCOMPARE(tb->floatButtonToolTip(), QStringLiteral("Undock window"));
+
+    tb->onFloatClicked();
+    Core::Group *group = dock1->dockWidget()->dptr()->group();
+    QVERIFY(group->isFloating());
+    QCOMPARE(group->titleBar()->floatButtonToolTip(), QStringLiteral("Dock window"));
+
+    group->titleBar()->onFloatClicked();
+    group = dock1->dockWidget()->dptr()->group();
+    QVERIFY(!group->isFloating());
+    QCOMPARE(group->titleBar()->floatButtonToolTip(), QStringLiteral("Undock window"));
+
+    // A single dock widget floated on its own gets a group created in the floating window
+    auto dock3 = new QtWidgets::DockWidget(QStringLiteral("dock3"));
+    m->addDockWidget(dock3->dockWidget(), Location_OnTop);
+    dock3->dockWidget()->setFloating(true);
+    group = dock3->dockWidget()->dptr()->group();
+    QVERIFY(group->isFloating());
+    QCOMPARE(group->titleBar()->floatButtonToolTip(), QStringLiteral("Dock window"));
 }
 
 void TestQtWidgets::tst_titleBarTitle()
