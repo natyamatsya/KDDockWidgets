@@ -64,6 +64,7 @@
 #include <QLineEdit>
 #include <QGraphicsProxyWidget>
 #include <QMouseEvent>
+#include <QSignalSpy>
 #include <QtTest/QTest>
 
 using namespace KDDockWidgets;
@@ -201,6 +202,7 @@ private Q_SLOTS:
     void tst_titleBarTitle();
     void tst_titleBarButtonNames();
     void tst_floatButtonToolTip();
+    void tst_titleBarCurrentDockWidgetChanged();
     void tst_widgetAddQAction();
     void tst_currentTabChanged();
     void tst_moveTab();
@@ -2413,6 +2415,27 @@ void TestQtWidgets::tst_titleBarButtonNames()
     }
 
     Config::self().setViewFactory(new QtWidgets::ViewFactory());
+}
+
+void TestQtWidgets::tst_titleBarCurrentDockWidgetChanged()
+{
+    // The QtWidgets title bar tells when it shows another dock widget, so a subclass can
+    // follow, for example when the current tab changes
+    EnsureTopLevelsDeleted e;
+    auto m = createMainWindow(QSize(1000, 1000), MainWindowOption_None, "MW1");
+    auto dock1 = new QtWidgets::DockWidget(QStringLiteral("dock1"));
+    auto dock2 = new QtWidgets::DockWidget(QStringLiteral("dock2"));
+    m->addDockWidget(dock1->dockWidget(), Location_OnBottom);
+    dock1->addDockWidgetAsTab(dock2);
+    dock1->dockWidget()->setAsCurrentTab();
+
+    auto titleBar = qobject_cast<QtWidgets::TitleBar *>(titleBarWidget(dock1));
+    QVERIFY(titleBar);
+    QSignalSpy spy(titleBar, &QtWidgets::TitleBar::currentDockWidgetChanged);
+
+    dock2->dockWidget()->setAsCurrentTab();
+    QVERIFY(spy.count() >= 1);
+    QCOMPARE(titleBar->titleBar()->currentDockWidget(), dock2->dockWidget());
 }
 
 void TestQtWidgets::tst_widgetAddQAction()

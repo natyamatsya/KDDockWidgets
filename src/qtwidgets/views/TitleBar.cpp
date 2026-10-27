@@ -151,6 +151,7 @@ public:
     KDBindings::ScopedConnection minimizeButtonConnection;
     KDBindings::ScopedConnection maximizeButtonConnection;
     KDBindings::ScopedConnection currentDockWidgetConnection;
+    KDBindings::ScopedConnection currentDockWidgetSignalConnection;
 };
 
 TitleBar::TitleBar(Core::TitleBar *controller, Core::View *parent)
@@ -287,6 +288,10 @@ void TitleBar::init()
 
     d->focusChangedConnection = m_titleBar->dptr()->isFocusedChanged.connect([this] {
         Q_EMIT isFocusedChanged();
+    });
+
+    d->currentDockWidgetSignalConnection = m_titleBar->dptr()->currentDockWidgetChanged.connect([this] {
+        Q_EMIT currentDockWidgetChanged();
     });
 }
 

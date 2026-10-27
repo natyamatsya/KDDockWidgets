@@ -58,6 +58,10 @@ public:
 Q_SIGNALS:
     void isFocusedChanged();
 
+    /// Emitted when the title bar might show another dock widget, see
+    /// Core::TitleBar::currentDockWidget(). For example when the current tab changes.
+    void currentDockWidgetChanged();
+
 protected:
     void init() override;
     void paintEvent(QPaintEvent *) override;
