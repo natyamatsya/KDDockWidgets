@@ -18,8 +18,10 @@
 #include "core/Logging_p.h"
 #include "core/DelayedCall_p.h"
 #include "qtcommon/View.h"
+#include "Qt5Qt6Compat_p.h"
 
 #include <QWindow>
+#include <QCursor>
 #include <QDebug>
 #include <QGuiApplication>
 #include <QElapsedTimer>
@@ -28,11 +30,23 @@
 #include <QFile>
 #include <QOperatingSystemVersion>
 
+#include <optional>
+
 using namespace KDDockWidgets;
 using namespace KDDockWidgets::QtCommon;
 using namespace KDDockWidgets::Core;
 
 // clazy:excludeall=missing-qobject-macro
+
+namespace {
+/// Where synthetic mouse events put the pointer, and where the platform's pointer was then
+struct SyntheticPointer
+{
+    QPoint pos;
+    Qt::MouseButtons buttons;
+    QPoint platformPos;
+};
+}
 
 class Platform_qt::GlobalEventFilter : public QObject
 {
@@ -51,8 +65,10 @@ public:
     {
         if (ev->type() == QEvent::Expose)
             return handleExpose(o);
-        else if (QMouseEvent *me = mouseEvent(ev))
+        else if (QMouseEvent *me = mouseEvent(ev)) {
+            trackPointer(me);
             return handleMouseEvent(o, me);
+        }
         else if (isDnDEvent(ev))
             return handleDnDEvent(o, ev);
         else if (ev->type() == QEvent::Move)
@@ -165,9 +181,41 @@ public:
         return false;
     }
 
+    /// The pointer as the last synthetic mouse event put it, while the platform's pointer has
+    /// not moved since. Null when the pointer is the platform's.
+    const SyntheticPointer *syntheticPointer() const
+    {
+        if (m_syntheticPointer && QCursor::pos() != m_syntheticPointer->platformPos)
+            m_syntheticPointer.reset(); // The mouse moved: a person took over
+        return m_syntheticPointer ? &*m_syntheticPointer : nullptr;
+    }
+
     ~GlobalEventFilter() override;
     bool m_isProcessingAppQuitEvent = false;
     Platform_qt *const q;
+
+private:
+    // Code that drives the UI with mouse events of its own (an automation layer, a test that
+    // sends events without moving the cursor) does not move the platform's pointer: QCursor::pos()
+    // and QGuiApplication::mouseButtons() never see its drags. So the pointer KDDW reads during a
+    // drag follows the last synthetic (not spontaneous) mouse event, until real input comes
+    // again: a spontaneous mouse event, or the platform's pointer moving away from where it was
+    // when that event came. Qt's own synthetic mouse events (the move it sends when the widget
+    // under the cursor changes) repeat the platform's pointer: they leave this alone. For real
+    // input both agree: a copy of a real event (the fallback mouse grabber forwards them)
+    // carries the platform's position and buttons.
+    void trackPointer(QMouseEvent *ev)
+    {
+        if (ev->spontaneous()) {
+            m_syntheticPointer.reset();
+            return;
+        }
+        if (ev->source() == Qt::MouseEventSynthesizedByQt)
+            return; // Qt repeating the platform's pointer, for instance as widgets move under it
+        m_syntheticPointer = SyntheticPointer { Qt5Qt6Compat::eventGlobalPos(ev), ev->buttons(), QCursor::pos() };
+    }
+
+    mutable std::optional<SyntheticPointer> m_syntheticPointer;
 };
 
 Platform_qt::GlobalEventFilter::~GlobalEventFilter() = default;
@@ -265,8 +313,15 @@ void Platform_qt::restoreMouseCursor()
     qGuiApp->restoreOverrideCursor();
 }
 
+bool Platform_qt::isPointerSynthetic() const
+{
+    return m_globalEventFilter->syntheticPointer() != nullptr;
+}
+
 QPoint Platform_qt::cursorPos() const
 {
+    if (const SyntheticPointer *pointer = m_globalEventFilter->syntheticPointer())
+        return pointer->pos;
     return QCursor::pos();
 }
 
@@ -297,6 +352,8 @@ Core::Platform::DisplayType Platform_qt::displayType() const
 
 bool Platform_qt::isLeftMouseButtonPressed() const
 {
+    if (const SyntheticPointer *pointer = m_globalEventFilter->syntheticPointer())
+        return pointer->buttons & Qt::LeftButton;
     return qGuiApp->mouseButtons() & Qt::LeftButton;
 }
 

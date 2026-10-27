@@ -55,6 +55,7 @@ public:
 
     QVector<std::shared_ptr<Core::Screen>> screens() const override;
 
+    bool isPointerSynthetic() const override;
     QPoint cursorPos() const override;
     void setCursorPos(QPoint) override;
 

@@ -214,8 +214,9 @@ void Separator::onMouseMove(Point pos)
 
 #ifdef KDDW_FRONTEND_QT_WINDOWS
         // Try harder, Qt can be wrong, if mixed with MFC
-        const bool mouseButtonIsReallyDown =
-            (GetKeyState(VK_LBUTTON) & 0x8000) || (GetKeyState(VK_RBUTTON) & 0x8000);
+        // A synthetic drag (Platform::isPointerSynthetic()) holds no button Windows knows of
+        const bool mouseButtonIsReallyDown = (GetKeyState(VK_LBUTTON) & 0x8000)
+            || (GetKeyState(VK_RBUTTON) & 0x8000) || Platform::instance()->isPointerSynthetic();
         if (!mouseButtonIsReallyDown) {
             KDDW_DEBUG(
                 "Separator::onMouseMove: Ignoring spurious mouse event. Someone ate our ReleaseEvent");

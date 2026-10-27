@@ -184,7 +184,17 @@ public:
     /// Overridden by flutter, so it can destroy the window
     virtual void onMainWindowDestroyed(Core::MainWindow *);
 
+    /// @brief Returns whether cursorPos() and isLeftMouseButtonPressed() follow mouse events
+    /// sent by code (an automation layer, a test) instead of the platform's pointer, which
+    /// then disagrees with them: native APIs that read the pointer don't see such a drag
+    virtual bool isPointerSynthetic() const
+    {
+        return false;
+    }
+
     /// Returns the mouse cursor position in screen coordinates
+    /// The Qt platforms return where the last synthetic mouse event put it, while the platform's
+    /// pointer stays where it was then (see isPointerSynthetic())
     virtual Point cursorPos() const = 0;
 
     /// Sets the mouse cursor position in screen coordinates

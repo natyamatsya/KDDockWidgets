@@ -278,7 +278,8 @@ StateDragging::StateDragging(DragController *parent)
         // Workaround bug #166 , where Qt doesn't agree with Window's mouse button state.
         // Looking in the Qt bug tracker there's many hits, so do a quick workaround here:
 
-        const bool mouseButtonIsReallyDown = (GetKeyState(VK_LBUTTON) & 0x8000);
+        // A synthetic drag (Platform::isPointerSynthetic()) holds no button Windows knows of
+        const bool mouseButtonIsReallyDown = (GetKeyState(VK_LBUTTON) & 0x8000) || Platform::instance()->isPointerSynthetic();
         if (!mouseButtonIsReallyDown && Platform::instance()->isLeftMouseButtonPressed()) {
             KDDW_DEBUG("Canceling drag, Qt thinks mouse button is pressed"
                        "but Windows knows it's not");
@@ -314,7 +315,10 @@ void StateDragging::onEntry()
     q->m_windowBeingDragged = q->m_draggable->makeWindow();
     if (q->m_windowBeingDragged) {
 #if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0) && defined(KDDW_FRONTEND_QT_WINDOWS)
-        if (!q->m_nonClientDrag && KDDockWidgets::usesNativeDraggingAndResizing()) {
+        // Not a synthetic drag (Platform::isPointerSynthetic()): the system would move the
+        // window with the real mouse
+        if (!q->m_nonClientDrag && KDDockWidgets::usesNativeDraggingAndResizing()
+            && !Platform::instance()->isPointerSynthetic()) {
             // Started as a client move, as the dock widget was docked,
             // but now that we're dragging it as a floating window, switch to native drag, so we can
             // still get aero-snap
@@ -960,7 +964,9 @@ std::shared_ptr<View> DragController::qtTopLevelUnderCursor() const
 {
     Point globalPos = Platform::instance()->cursorPos();
 
-    if (KDDockWidgets::isWindows()) { // So -platform offscreen on Windows doesn't use this
+    // So -platform offscreen on Windows doesn't use this, nor a synthetic drag, whose pointer
+    // isn't GetCursorPos()'s
+    if (KDDockWidgets::isWindows() && !Platform::instance()->isPointerSynthetic()) {
 #if defined(KDDW_FRONTEND_QT_WINDOWS)
         POINT globalNativePos;
         if (!GetCursorPos(&globalNativePos))

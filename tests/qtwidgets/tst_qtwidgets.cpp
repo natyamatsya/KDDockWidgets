@@ -43,6 +43,8 @@
 #include "qtwidgets/views/ViewWrapper_p.h"
 #include "qtwidgets/views/DockWidget.h"
 #include "qtwidgets/views/TitleBar.h"
+#include "qtwidgets/views/Separator.h"
+#include "core/DropIndicatorOverlay.h"
 #include "qtcommon/View.h"
 
 #include "ui_mainwindow.h"
@@ -64,6 +66,8 @@
 #include <QLineEdit>
 #include <QGraphicsProxyWidget>
 #include <QMouseEvent>
+#include <QCursor>
+#include <QPointer>
 #include <QSignalSpy>
 #include <QtTest/QTest>
 
@@ -204,6 +208,8 @@ private Q_SLOTS:
     void tst_floatButtonToolTip();
     void tst_titleBarCurrentDockWidgetChanged();
     void tst_tabBarButtonsFollowTitleBar();
+    void tst_syntheticDragMovesSeparator();
+    void tst_syntheticDragTabsDockWidget();
     void tst_widgetAddQAction();
     void tst_currentTabChanged();
     void tst_moveTab();
@@ -3346,6 +3352,94 @@ void TestQtWidgets::tst_controllerToView()
 
     QCOMPARE(dw->view(), dwView);
     QCOMPARE(dws[0]->view(), dwView);
+}
+
+namespace {
+/// Sends a mouse event at global position @p global to @p receiver, as an automation layer does:
+/// not spontaneous, and without moving the platform's pointer
+void sendSyntheticMouse(QWidget *receiver, QEvent::Type type, QPoint global, Qt::MouseButton button,
+                        Qt::MouseButtons buttons)
+{
+    QMouseEvent ev(type, receiver->mapFromGlobal(QPointF(global)), QPointF(global), button, buttons,
+                   Qt::NoModifier);
+    QCoreApplication::sendEvent(receiver, &ev);
+}
+}
+
+void TestQtWidgets::tst_syntheticDragMovesSeparator()
+{
+    // A drag made of mouse events alone moves a separator: Qt knows of no button held, and the
+    // platform's pointer is elsewhere
+    EnsureTopLevelsDeleted e;
+    QCursor::setPos(QPoint(1, 1));
+    auto m = createMainWindow(QSize(800, 500), MainWindowOption_None);
+    auto dw1 = newDockWidget(QStringLiteral("1"));
+    auto dw2 = newDockWidget(QStringLiteral("2"));
+    m->addDockWidget(dw1, Location_OnLeft);
+    m->addDockWidget(dw2, Location_OnRight);
+
+    const auto separators = QtCommon::View_qt::asQWidget(m->view())->findChildren<QtWidgets::Separator *>();
+    QCOMPARE(separators.size(), 1);
+    QWidget *separator = separators.constFirst();
+    const int widthBefore = dw1->sizeInLayout().width();
+    const QPoint press = separator->mapToGlobal(separator->rect().center());
+
+    sendSyntheticMouse(separator, QEvent::MouseButtonPress, press, Qt::LeftButton, Qt::LeftButton);
+    for (int dx = 10; dx <= 60; dx += 10)
+        sendSyntheticMouse(separator, QEvent::MouseMove, press + QPoint(dx, 0), Qt::NoButton, Qt::LeftButton);
+    sendSyntheticMouse(separator, QEvent::MouseButtonRelease, press + QPoint(60, 0), Qt::LeftButton, Qt::NoButton);
+
+    // The separator goes where the press was in it: the same within its thickness
+    QVERIFY(std::abs(dw1->sizeInLayout().width() - (widthBefore + 60)) <= separator->width());
+    QCOMPARE(QCursor::pos(), QPoint(1, 1));
+
+    // Once the platform's pointer moves, it is the pointer again
+    QVERIFY(Platform::instance()->isPointerSynthetic());
+    QCursor::setPos(QPoint(2, 2));
+    QVERIFY(!Platform::instance()->isPointerSynthetic());
+    QCOMPARE(Platform::instance()->cursorPos(), QPoint(2, 2));
+}
+
+void TestQtWidgets::tst_syntheticDragTabsDockWidget()
+{
+    // A drag made of mouse events alone, all sent to the title bar pressed, moves a dock widget:
+    // the drop area under the drag is found where the events are, not where the platform's
+    // pointer is
+    EnsureTopLevelsDeleted e;
+    if (!DragController::instance()->isIdle())
+        DragController::instance()->programmaticStopDrag(); // a press an earlier test left (tst_overlayCrash)
+    QCursor::setPos(QPoint(1, 1));
+    auto m = createMainWindow(QSize(800, 500), MainWindowOption_None);
+    auto dw1 = newDockWidget(QStringLiteral("1"));
+    auto dw2 = newDockWidget(QStringLiteral("2"));
+    m->addDockWidget(dw1, Location_OnLeft);
+    m->addDockWidget(dw2, Location_OnRight);
+    QVERIFY(!dw2->isTabbed());
+
+    QPointer<QWidget> titleBar = QtCommon::View_qt::asQWidget(dw2->titleBar()->view());
+    QVERIFY(titleBar->isVisible());
+    QPoint pos = titleBar->mapToGlobal(QPoint(10, titleBar->height() / 2));
+    sendSyntheticMouse(titleBar, QEvent::MouseButtonPress, pos, Qt::LeftButton, Qt::LeftButton);
+
+    // Over the other dock widget, which shows the drop indicators, then onto the center one
+    QWidget *target = QtCommon::View_qt::asQWidget(dw1->view());
+    const QPoint over = target->mapToGlobal(target->rect().center());
+    for (int i = 1; i <= 10; ++i) {
+        pos += (over - pos) / (11 - i);
+        sendSyntheticMouse(titleBar, QEvent::MouseMove, pos, Qt::NoButton, Qt::LeftButton);
+        QVERIFY(titleBar);
+    }
+    QVERIFY(DragController::instance()->isDragging());
+    const QPoint center = m->multiSplitter()->dropIndicatorOverlay()->posForIndicator(DropLocation_Center);
+    sendSyntheticMouse(titleBar, QEvent::MouseMove, center, Qt::NoButton, Qt::LeftButton);
+    QCOMPARE(m->multiSplitter()->dropIndicatorOverlay()->currentDropLocation(), DropLocation_Center);
+    sendSyntheticMouse(titleBar, QEvent::MouseButtonRelease, center, Qt::LeftButton, Qt::NoButton);
+
+    QVERIFY(!DragController::instance()->isDragging());
+    QVERIFY(dw2->isTabbed());
+    QVERIFY(dw1->isTabbed());
+    QVERIFY(!dw2->isFloating());
+    QCOMPARE(QCursor::pos(), QPoint(1, 1));
 }
 
 int main(int argc, char *argv[])
