@@ -51,6 +51,13 @@ protected:
                      Qt5Qt6Compat::qintptr *result) override;
 #endif
 
+    /// @brief Sets the margins around the title bar and the drop area: 4 logical pixels by
+    /// default, along which the window is resized when it has no native frame. Called at init()
+    /// and when the window moves to another screen. Override it to lay the window out
+    /// differently, for example to paint a frame of your own; leave the window at least the
+    /// default margins where a frameless window is to be resized from its edges.
+    virtual void updateMargins();
+
 Q_SIGNALS:
     void numGroupsChanged();
 
@@ -58,7 +65,6 @@ private:
     class Private;
     Private *const d;
 
-    void updateMargins();
     Q_DISABLE_COPY(FloatingWindow)
 };
 
