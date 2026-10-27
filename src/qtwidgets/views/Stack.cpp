@@ -45,8 +45,11 @@ public:
     KDBindings::ScopedConnection buttonsToHideIfDisabledConnection;
     KDBindings::ScopedConnection currentDockWidgetChangedConnection;
     KDBindings::ScopedConnection floatButtonToolTipConnection;
+    KDBindings::ScopedConnection floatButtonVisibleConnection;
+    KDBindings::ScopedConnection autoHideButtonConnection;
 
     QHBoxLayout *cornerWidgetLayout = nullptr;
+    QAbstractButton *autoHideButton = nullptr;
     QAbstractButton *floatButton = nullptr;
     QAbstractButton *closeButton = nullptr;
 };
@@ -130,9 +133,11 @@ void Stack::setupTabBarButtons()
         return;
 
     auto factory = static_cast<ViewFactory *>(Config::self().viewFactory());
+    d->autoHideButton = factory->createTitleBarButton(this, TitleBarButtonType::AutoHide);
     d->closeButton = factory->createTitleBarButton(this, TitleBarButtonType::Close);
     d->floatButton = factory->createTitleBarButton(this, TitleBarButtonType::Float);
     d->closeButton->setToolTip(tr("Close"));
+    d->autoHideButton->setVisible(false); // until the title bar says it supports auto-hide
 
     auto cornerWidget = new QWidget(this);
     cornerWidget->setObjectName(QStringLiteral("Corner Widget"));
@@ -141,8 +146,14 @@ void Stack::setupTabBarButtons()
 
     d->cornerWidgetLayout = new QHBoxLayout(cornerWidget);
 
+    d->cornerWidgetLayout->addWidget(d->autoHideButton);
     d->cornerWidgetLayout->addWidget(d->floatButton);
     d->cornerWidgetLayout->addWidget(d->closeButton);
+
+    connect(d->autoHideButton, &QAbstractButton::clicked, this, [this] {
+        Core::TitleBar *tb = m_stack->group()->titleBar();
+        tb->onAutoHideClicked();
+    });
 
     connect(d->floatButton, &QAbstractButton::clicked, this, [this] {
         Core::TitleBar *tb = m_stack->group()->titleBar();
@@ -169,11 +180,13 @@ void Stack::setupTabBarButtons()
 
     // Name the buttons after the current dock widget, if the factory wants that.
     // The group's title bar doesn't exist yet, as the group creates us first. Follow its float
-    // button's tooltip once the first dock widget arrives.
+    // and auto-hide buttons once the first dock widget arrives: the buttons here stand in for
+    // the title bar's while it's hidden.
     d->currentDockWidgetChangedConnection = m_stack->tabBar()->dptr()->currentDockWidgetChanged.connect([this](Core::DockWidget *dw) {
         auto factory = static_cast<ViewFactory *>(Config::self().viewFactory());
         for (auto [button, type] : { std::pair(d->closeButton, TitleBarButtonType::Close),
-                                     std::pair(d->floatButton, TitleBarButtonType::Float) }) {
+                                     std::pair(d->floatButton, TitleBarButtonType::Float),
+                                     std::pair(d->autoHideButton, TitleBarButtonType::AutoHide) }) {
             const QString name = factory->titleBarButtonObjectName(type, dw);
             if (!name.isEmpty())
                 button->setObjectName(name);
@@ -185,6 +198,15 @@ void Stack::setupTabBarButtons()
 
         d->floatButton->setToolTip(tb->floatButtonToolTip());
         d->floatButtonToolTipConnection = tb->dptr()->floatButtonToolTipChanged.connect([this](const QString &text) { d->floatButton->setToolTip(text); });
+
+        d->floatButton->setVisible(tb->floatButtonVisible());
+        d->floatButtonVisibleConnection = tb->dptr()->floatButtonVisibleChanged.connect([this](bool visible) { d->floatButton->setVisible(visible); });
+
+        d->autoHideButtonConnection = tb->dptr()->autoHideButtonChanged.connect([this](bool visible, bool enabled, TitleBarButtonType type) {
+            updateAutoHideButton(visible, enabled, type);
+        });
+        // The title bar announces its auto-hide button deferred, maybe already: ask again
+        tb->updateButtons();
     });
 
     updateTabBarButtons();
@@ -198,6 +220,16 @@ void Stack::updateTabBarButtons()
         d->closeButton->setEnabled(enabled);
         d->closeButton->setVisible(visible);
     }
+}
+
+void Stack::updateAutoHideButton(bool visible, bool enabled, TitleBarButtonType type)
+{
+    d->autoHideButton->setToolTip(type == TitleBarButtonType::AutoHide ? tr("Auto-hide")
+                                                                       : tr("Disable auto-hide"));
+    auto factory = Config::self().viewFactory();
+    d->autoHideButton->setIcon(factory->iconForButtonType(type, devicePixelRatioF()));
+    d->autoHideButton->setVisible(visible);
+    d->autoHideButton->setEnabled(enabled);
 }
 
 void Stack::updateMargins()
@@ -272,11 +304,12 @@ QAbstractButton *Stack::button(TitleBarButtonType type) const
         return d->closeButton;
     case TitleBarButtonType::Float:
         return d->floatButton;
+    case TitleBarButtonType::AutoHide:
+    case TitleBarButtonType::UnautoHide:
+        return d->autoHideButton;
     case TitleBarButtonType::Minimize:
     case TitleBarButtonType::Maximize:
     case TitleBarButtonType::Normal:
-    case TitleBarButtonType::AutoHide:
-    case TitleBarButtonType::UnautoHide:
     case TitleBarButtonType::AllTitleBarButtonTypes:
         return nullptr;
     }

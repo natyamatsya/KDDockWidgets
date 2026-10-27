@@ -203,6 +203,7 @@ private Q_SLOTS:
     void tst_titleBarButtonNames();
     void tst_floatButtonToolTip();
     void tst_titleBarCurrentDockWidgetChanged();
+    void tst_tabBarButtonsFollowTitleBar();
     void tst_widgetAddQAction();
     void tst_currentTabChanged();
     void tst_moveTab();
@@ -2436,6 +2437,44 @@ void TestQtWidgets::tst_titleBarCurrentDockWidgetChanged()
     dock2->dockWidget()->setAsCurrentTab();
     QVERIFY(spy.count() >= 1);
     QCOMPARE(titleBar->titleBar()->currentDockWidget(), dock2->dockWidget());
+}
+
+void TestQtWidgets::tst_tabBarButtonsFollowTitleBar()
+{
+    // With the title bar hidden, the buttons next to the tabs stand in for its buttons:
+    // the auto-hide button too, and the float button only where the title bar has one
+    EnsureTopLevelsDeleted e;
+    auto &config = Config::self();
+    config.setFlags(config.flags() | Config::Flag_HideTitleBarWhenTabsVisible
+                    | Config::Flag_ShowButtonsOnTabBarIfTitleBarHidden
+                    | Config::Flag_AutoHideSupport | Config::Flag_TitleBarNoFloatButton);
+    config.setViewFactory(new ButtonNamesViewFactory());
+    auto m = createMainWindow(QSize(1000, 1000), MainWindowOption_None, "MW1");
+    auto dock1 = new QtWidgets::DockWidget(QStringLiteral("dock1"));
+    auto dock2 = new QtWidgets::DockWidget(QStringLiteral("dock2"));
+    m->addDockWidget(dock1->dockWidget(), Location_OnBottom);
+    dock1->addDockWidgetAsTab(dock2);
+
+    QtWidgets::Stack *stack = stackWidget(dock1);
+    QVERIFY(stack);
+    QAbstractButton *autoHideButton = stack->button(TitleBarButtonType::AutoHide);
+    QAbstractButton *floatButton = stack->button(TitleBarButtonType::Float);
+    QVERIFY(autoHideButton);
+    QCOMPARE(stack->button(TitleBarButtonType::UnautoHide), autoHideButton);
+    QVERIFY(floatButton);
+    QVERIFY(autoHideButton->isVisibleTo(stack));
+    QVERIFY(!floatButton->isVisibleTo(stack));
+    QCOMPARE(autoHideButton->toolTip(), QStringLiteral("Auto-hide"));
+
+    dock2->dockWidget()->setAsCurrentTab();
+    QCOMPARE(autoHideButton->objectName(), QStringLiteral("dock2-AutoHide"));
+
+    // Like the title bar's, it sends the current tab to the side bar
+    autoHideButton->click();
+    QVERIFY(dock2->dockWidget()->isInSideBar());
+    QVERIFY(!dock1->dockWidget()->isInSideBar());
+
+    Config::self().setViewFactory(new QtWidgets::ViewFactory());
 }
 
 void TestQtWidgets::tst_widgetAddQAction()

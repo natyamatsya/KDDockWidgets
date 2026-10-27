@@ -56,6 +56,7 @@ private:
     void updateMargins();
     void setupTabBarButtons();
     void updateTabBarButtons();
+    void updateAutoHideButton(bool visible, bool enabled, TitleBarButtonType);
 
     class Private;
     Private *const d;
