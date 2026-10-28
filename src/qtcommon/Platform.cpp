@@ -204,15 +204,23 @@ private:
     // under the cursor changes) repeat the platform's pointer: they leave this alone. For real
     // input both agree: a copy of a real event (the fallback mouse grabber forwards them)
     // carries the platform's position and buttons.
+    //
+    // Input handed to Qt through the platform interface (QWindowSystemInterface), as an
+    // automation layer does to make its input reach the widgets as a person's does, is
+    // spontaneous too, but on a screen it does not move the platform's pointer: a spontaneous
+    // event counts as real input when it is where the platform's pointer is (within a pixel, for
+    // fractional positions), and as synthetic otherwise.
     void trackPointer(QMouseEvent *ev)
     {
-        if (ev->spontaneous()) {
+        if (ev->source() == Qt::MouseEventSynthesizedByQt)
+            return; // Qt repeating the platform's pointer, for instance as widgets move under it
+        const QPoint pos = Qt5Qt6Compat::eventGlobalPos(ev);
+        const QPoint platformPos = QCursor::pos();
+        if (ev->spontaneous() && (pos - platformPos).manhattanLength() <= 1) {
             m_syntheticPointer.reset();
             return;
         }
-        if (ev->source() == Qt::MouseEventSynthesizedByQt)
-            return; // Qt repeating the platform's pointer, for instance as widgets move under it
-        m_syntheticPointer = SyntheticPointer { Qt5Qt6Compat::eventGlobalPos(ev), ev->buttons(), QCursor::pos() };
+        m_syntheticPointer = SyntheticPointer { pos, ev->buttons(), platformPos };
     }
 
     mutable std::optional<SyntheticPointer> m_syntheticPointer;
